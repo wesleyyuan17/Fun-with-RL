@@ -4,7 +4,7 @@ import random
 import matplotlib.pyplot as plt
 import sys
 import os
-# os.environ['KMP_DUPLICATE_LIB_OK']='True'
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 from SwingyMonkey import SwingyMonkey
 
@@ -38,12 +38,13 @@ class Learner:
     self.gamma = gamma
     self.tick = 0
     self.transition_hist = []
-    self.NN_base = Neural_Network()
-    self.NN_update = Neural_Network()
-    self.optimizer = torch.optim.Adam(self.NN_update.parameters(), lr=alpha)
+    self.NN_A = Neural_Network()
+    self.NN_B = Neural_Network()
+    self.optimizer = torch.optim.Adam(self.NN_A.parameters(), lr=alpha)
     self.criterion = nn.MSELoss()
     self.score = 0
     self.max_score = 0
+    self.loss_val = []
 
   def reset(self):
     self.last_state  = None
@@ -60,38 +61,33 @@ class Learner:
       new_action = (0 if npr.rand() < 0.1 else 1)
 
       self.tick += 1 # track iterations
-
-    elif self.tick < 100: # build buffer
-      new_action = (0 if npr.rand() < 0.1 else 1)
-
-      self.transition_hist.append([self.last_state,
-                                   self.last_action,
-                                   self.last_reward,
-                                   new_state])
-
-      self.tick += 1
-
     else:
-      pred_Q = self.NN_update(self.last_state)[self.last_action]
-      target = self.last_reward + self.gamma*self.NN_base(new_state).max()
+      # if npr.rand() < 0.5: # pick one NN to update
 
-      self.transition_hist.append([self.last_state,
-                                   self.last_action,
-                                   self.last_reward,
-                                   new_state])
-      self.transition_hist.pop(0) # get rid of element
+      #   update_A = True # track which NN is being updated
+
+      #   pred_Q = self.NN_A(self.last_state)[self.last_action]
+      #   a_star = self.NN_A(new_state).argmax()
+      #   target = self.last_reward + self.gamma*self.NN_B(new_state)[a_star]
+      # else:
+
+      #   update_A = False
+
+      #   pred_Q = self.NN_B(self.last_state)[self.last_action]
+      #   a_star = self.NN_B(new_state).argmax()
+      #   target = self.last_reward + self.gamma*self.NN_A(new_state)[a_star]
+      
+      pred_Q = self.NN_A(self.last_state)[self.last_action]
+      a_star = self.NN_A(new_state).argmax()
+      target = self.last_reward + self.gamma*self.NN_B(new_state)[a_star]
 
       self.optimizer.zero_grad() # zero gradient buffer
 
-      sample = random.sample(self.transition_hist, 20)
-      loss = self.loss(sample)
-      # how to get mean in loss?
-
-      # loss = self.loss(pred_Q, target)
-
+      loss = self.loss(pred_Q, target)
+      self.loss_val.append(loss)
       # print(loss.item())
       loss.backward() # set up gradients in buffer
-      print(self.NN_update.fc1.bias.grad)
+      # print(self.NN_A.fc1.bias.grad)
       self.optimizer.step() # perform update
 
       self.tick += 1 # track iterations
@@ -100,13 +96,18 @@ class Learner:
       if npr.rand() < 1/self.tick:
         new_action = (0 if npr.rand() < 0.1 else 1)
       else:
-        new_action = self.NN_update.forward(self.state_parser(state)).argmax() # new action
+        # if update_A:
+        #   new_action = self.NN_A.forward(self.state_parser(state)).argmax() # new action
+        # else:
+        #   new_action = self.NN_B.forward(self.state_parser(state)).argmax() # new action
+
+        new_action = self.NN_A.forward(self.state_parser(state)).argmax() # new action
 
     # update second neural network as needed
     if self.tick % 200 == 0:
-      torch.save(self.NN_update, 'NN')
-      self.NN_base = torch.load('NN')
-      self.NN_base.eval()
+      torch.save(self.NN_A, 'NN')
+      self.NN_B = torch.load('NN')
+      self.NN_B.eval()
 
     self.last_action = new_action # update state and action
     self.last_state = new_state
@@ -122,16 +123,8 @@ class Learner:
   #   l = torch.mean((pred_Q - target)**2)
   #   return l
 
-  def loss(self, transitions): # also converges to only immediately hitting top
-    l = 0
-    j = 0
-    for i in range(len(transitions)):
-      p = self.NN_update(transitions[i][0])[transitions[i][1]]
-      t = transitions[i][2] + self.gamma*self.NN_base(transitions[i][3]).max()
-      l = l + (p - t)**2
-      j += 1
-    l = l / j
-    return l
+  def loss(self, pred_Q, target): # also converges to only immediately hitting top
+    return (pred_Q - target)**2
 
   def state_parser(self, state):
     s = torch.tensor([state['tree']['dist'],
@@ -167,4 +160,13 @@ fig = plt.figure(figsize=(18,6))
 plt.plot(np.arange(0,len(scores)), scores)
 plt.xlabel('Iteration')
 plt.ylabel('Score')
+
+fig = plt.figure(figsize=(18,6))
+plt.plot(np.arange(0,len(learner.loss_val)), learner.loss_val)
+plt.xlabel('Iteration')
+plt.ylabel('Loss')
 plt.show()
+
+
+
+
