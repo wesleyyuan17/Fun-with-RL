@@ -28,7 +28,6 @@ class FrameProcessor():
         processed_frame = processed_frame.crop(crop_frame) # crop to 84x84 image
         return processed_frame
 
-
 ## Neural Network implementation class ############################################################
 
 class DQN(torch.nn.Module):
@@ -40,6 +39,8 @@ class DQN(torch.nn.Module):
 			agent_history_length: number of frames that make up state i.e. input dim for first
 								  convolutional layer
 		'''
+        self.action_space = n_actions
+
 		# 4 input layers, 32 filters of 8x8 layer w/ stride 4, apply rectifier
 		# output is 20x20x32
 		self.conv1 = torch.nn.functional.relu(torch.nn.Conv2d(agent_history_length, 
@@ -84,6 +85,7 @@ class DQN(torch.nn.Module):
 
 	def forward(self, x):
 		'''
+        Passes x through the DQN, returns the resulting Q-value output
 		Args:
 			x: A (84, 84, 4) tensor representing current state of game
 		Returns:
@@ -97,6 +99,24 @@ class DQN(torch.nn.Module):
 		value = self.value(torch.flatten(value)) # value of being in state
 		advantage = self.advantage(torch.flatten(advantage)) # vector of advantage for each action
 		return value + (advantage - np.mean(advantage))
+
+    def act(self, state, eps):
+        '''
+        Takes a state and decides how to act for next step
+        Args:
+            state: A (84, 84, 4) tensor corresponding to last 4 frames seen
+            eps: float, epsilon for exploration vs exploitation
+        Returns:
+            action: integer, index corresponding to some action in action space
+        '''
+        if np.random.random() < eps: # exploit
+            state = torch.tensor(state)
+            q_val = self.forward(state)
+            action = np.argmax(q_val)
+        else: # explore
+            action = np.random.randint(0, self.action_space)
+
+        return action
 
 ## Exploration v Exploitation scheduler ###########################################################
 
@@ -138,7 +158,7 @@ class ReplayMemory(object):
     def add_experience(self, action, frame, reward, terminal):
         '''
         Args:
-            action: An integer between 0 and env.action_space.n - 1 
+            action: An integer between 0 and n_action - 1
                 determining the action the agent perfomed
             frame: A (84, 84, 1) frame of an Atari game in grayscale
             reward: A float determining the reward the agend received for performing an action
@@ -195,3 +215,75 @@ class ReplayMemory(object):
 ## Target Network Updater? ########################################################################
 
 ## Atari wrapper ##################################################################################
+
+class Atari():
+    ''' Wrapper for environment provided by gym '''
+    def __init__(self, envName, no_op_steps=10, agent_history_length=4):
+        '''
+        Args:
+            envName: type of environment to pass to gym.make()
+            no_op_steps: Integer, random number of fire actions
+            agent_history_length: Integer, number of frames that make up a state
+        '''
+        self.env = gym.make(envName)
+        self.process_frame = FrameProcessor()
+        self.state = None
+        self.last_lives = 0
+        self.no_op_steps = no_op_steps
+        self.agent_history_length = agent_history_length
+
+    def reset(self):
+        '''
+        Resets environment and stakcs 4 frames on top of each other to produce first state
+        '''
+        frame = self.env.reset()
+        self.last_lives = 0
+        terminal_life_lost = True # Set to true so that the agent starts 
+                                  # with a 'FIRE' action when evaluating
+        processed_frame = self.process_frame(frame) # process frame
+        self.state = np.repeat(processed_frame, self.agent_history_length, axis=2) # stack to create initial state
+
+        return terminal_life_lost
+
+    def step(self, action):
+        '''
+        Takes action and observes reward and resulting state
+        Args:
+            action: Integer, corresponds to a valid action to be taken
+        '''
+        new_frame, reward, terminal, info = self.env.step(action) # take step with gym
+
+        if info['ale.lives'] < self.last_lives:
+            terminal_life_lost = True
+        else:
+            terminal_life_lost = terminal
+        self.last_lives = info['ale.lives']
+
+        processed_new_frame = self.process_frame(new_frame) # process frame
+        new_state = np.append(self.state[:, :, 1:], processed_new_frame, axis=2) # create new state
+        self.state = new_state
+        
+        return processed_new_frame, reward, terminal, terminal_life_lost, new_frame
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
