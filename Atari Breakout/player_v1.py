@@ -123,3 +123,7 @@ while frame_number < MAX_FRAMES:
         generate_gif(frame_number, frames_for_gif, eval_rewards[0], PATH)
     except IndexError:
         print("No evaluation game finished")
+
+    # Save the network parameters
+    saver.save(sess, PATH+'/my_model', global_step=frame_number)
+    frames_for_gif = []
