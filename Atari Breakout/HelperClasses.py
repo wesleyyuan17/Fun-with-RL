@@ -212,8 +212,6 @@ class ReplayMemory(object):
         		np.transpose(self.new_states, axes=(0, 2, 3, 1)), 
         		self.terminal_flags[self.indices]]
 
-## Target Network Updater? ########################################################################
-
 ## Atari wrapper ##################################################################################
 
 class Atari():
@@ -232,7 +230,7 @@ class Atari():
         self.no_op_steps = no_op_steps
         self.agent_history_length = agent_history_length
 
-    def reset(self):
+    def reset(self, evaluation=False):
         '''
         Resets environment and stakcs 4 frames on top of each other to produce first state
         '''
@@ -240,6 +238,10 @@ class Atari():
         self.last_lives = 0
         terminal_life_lost = True # Set to true so that the agent starts 
                                   # with a 'FIRE' action when evaluating
+
+        if evaluation:
+            for _ in range(random.randint(1, self.no_op_steps)):
+                frame, _, _, _ = self.env.step(1) # Action 'Fire'
         processed_frame = self.process_frame(frame) # process frame
         self.state = np.repeat(processed_frame, self.agent_history_length, axis=2) # stack to create initial state
 
