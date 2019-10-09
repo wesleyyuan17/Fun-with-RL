@@ -125,5 +125,5 @@ while frame_number < MAX_FRAMES:
         print("No evaluation game finished")
 
     # Save the network parameters
-    saver.save(sess, PATH+'/my_model', global_step=frame_number)
+    torch.save(main_dqn, PATH+'/my_model')
     frames_for_gif = []
