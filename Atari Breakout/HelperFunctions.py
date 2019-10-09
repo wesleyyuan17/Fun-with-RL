@@ -74,7 +74,6 @@ def EESchedule(frame_number, replay_memory_start_size, eps_initial, eps_final):
 	else:
 		return np.max(replay_memory_start_size / frame_number, eps_final)
 
-
 def generate_gif(frame_number, frames_for_gif, reward, path):
     """
         Args:

@@ -49,28 +49,28 @@ while frame_number < MAX_FRAMES:
 	epoch_frame = 0 # initialize epoch frame count
 	while epoch_frame < EVAL_FREQUENCY:
 		terminal_life_lost = atari.reset() # initialize state
-        episode_reward_sum = 0 # initialize reward count
-        for _ in range(MAX_EPISODE_LENGTH):
-        	# get probability of taking random action and get action
-        	eps = EESchedule(frame_number, REPLAY_MEMORY_START_SIZE, EPS_INIT, EPS_FINAL)
-        	action = main_dqn.act(state=atari.state, eps=eps)
+		episode_reward_sum = 0 # initialize reward count
+		for _ in range(MAX_EPISODE_LENGTH):
+			# get probability of taking random action and get action
+			eps = EESchedule(frame_number, REPLAY_MEMORY_START_SIZE, EPS_INIT, EPS_FINAL)
+			action = main_dqn.act(state=atari.state, eps=eps)
 
-        	# take step
-        	processed_new_frame, reward, terminal, terminal_life_lost, _ = atari.step(action)
+			# take step
+			processed_new_frame, reward, terminal, terminal_life_lost, _ = atari.step(action)
 
-        	# update counts
-        	frame_number += 1
-            epoch_frame += 1
-            episode_reward_sum += reward
+			# update counts
+			frame_number += 1
+			epoch_frame += 1
+			episode_reward_sum += reward
 
-            # Clip the reward
+			# Clip the reward
 			clipped_reward = clip_reward(reward)
 
 			# add experience to memory
 			mem_replay.add_experience(action=action, 
-                                      frame=processed_new_frame[:, :, 0], 
-                                      reward=clipped_reward, 
-                                      terminal=terminal_life_lost)
+									  frame=processed_new_frame[:, :, 0], 
+									  reward=clipped_reward, 
+									  terminal=terminal_life_lost)
 
 			# calculate loss and update parameters
 			if frame_number % UPDATE_FREQ == 0 and frame_number > REPLAY_MEMORY_START_SIZE:
@@ -83,47 +83,47 @@ while frame_number < MAX_FRAMES:
 
 			# lost, break out of episode
 			if terminal:
-                terminal = False
-                break
+				terminal = False
+				break
 
-            # record rewards
-            rewards.append(episode_reward_sum)
+			# record rewards
+			rewards.append(episode_reward_sum)
 
-    ''' Evaluation '''
-    terminal = True
-    gif = True
-    frames_for_gif = []
-    eval_rewards = []
-    evaluate_frame_number = 0
+	''' Evaluation '''
+	terminal = True
+	gif = True
+	frames_for_gif = []
+	eval_rewards = []
+	evaluate_frame_number = 0
 
-    for _ in range(EVAL_STEPS):
-        if terminal:
-            terminal_life_lost = atari.reset(sess, evaluation=True)
-            episode_reward_sum = 0
-            terminal = False
+	for _ in range(EVAL_STEPS):
+		if terminal:
+			terminal_life_lost = atari.reset(sess, evaluation=True)
+			episode_reward_sum = 0
+			terminal = False
 
-    # Fire (action 1), when a life was lost or the game just started, 
-    # so that the agent does not stand around doing nothing. When playing 
-    # with other environments, you might want to change this...
-    action = 1 if terminal_life_lost else main_dqn.act(state=atari.state, eps=0.0) # eps = 0.0
+	# Fire (action 1), when a life was lost or the game just started, 
+	# so that the agent does not stand around doing nothing. When playing 
+	# with other environments, you might want to change this...
+	action = 1 if terminal_life_lost else main_dqn.act(state=atari.state, eps=0.0) # eps = 0.0
 
-    processed_new_frame, reward, terminal, terminal_life_lost, new_frame = atari.step(sess, action)
+	processed_new_frame, reward, terminal, terminal_life_lost, new_frame = atari.step(sess, action)
 
-    evaluate_frame_number += 1
-    episode_reward_sum += reward
+	evaluate_frame_number += 1
+	episode_reward_sum += reward
 
-    if gif: 
-        frames_for_gif.append(new_frame)
-    if terminal:
-        eval_rewards.append(episode_reward_sum)
-        gif = False # Save only the first game of the evaluation as a gif
+	if gif: 
+		frames_for_gif.append(new_frame)
+	if terminal:
+		eval_rewards.append(episode_reward_sum)
+		gif = False # Save only the first game of the evaluation as a gif
 
-    print("Evaluation score:\n", np.mean(eval_rewards))       
-    try:
-        generate_gif(frame_number, frames_for_gif, eval_rewards[0], PATH)
-    except IndexError:
-        print("No evaluation game finished")
+	print("Evaluation score:\n", np.mean(eval_rewards))       
+	try:
+		generate_gif(frame_number, frames_for_gif, eval_rewards[0], PATH)
+	except IndexError:
+		print("No evaluation game finished")
 
-    # Save the network parameters
-    torch.save(main_dqn, PATH+'/my_model')
-    frames_for_gif = []
+	# Save the network parameters
+	torch.save(main_dqn, PATH+'/my_model')
+	frames_for_gif = []
