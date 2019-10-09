@@ -18,7 +18,7 @@ class FrameProcessor():
     def __call__(self, frame):
     	'''
         Args:
-            frame: A (210, 160, 3) frame of an Atari game in RGB
+           frame: A (210, 160, 3) frame of an Atari game in RGB
         Returns:
             A processed (84, 84, 1) frame in grayscale
         '''
