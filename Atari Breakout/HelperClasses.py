@@ -1,4 +1,5 @@
 ## imports for whatever classes need ##############################################################
+import gym
 import numpy as np
 from PIL import Image
 import torch
@@ -26,7 +27,7 @@ class FrameProcessor():
 		processed_frame = processed_frame.resize((110, 84)) # resize to 110x84 image
 		crop_frame = (0, 36, self.frame_width, 36 + self.frame_height) # left, upper, right, lower
 		processed_frame = processed_frame.crop(crop_frame) # crop to 84x84 image
-		return processed_frame
+		return np.array(processed_frame)
 
 ## Neural Network implementation class ############################################################
 
@@ -39,47 +40,46 @@ class DQN(torch.nn.Module):
 			agent_history_length: number of frames that make up state i.e. input dim for first
 								  convolutional layer
 		'''
+		super().__init__()
 		self.action_space = n_actions
 
 		# 4 input layers, 32 filters of 8x8 layer w/ stride 4, apply rectifier
 		# output is 20x20x32
-		self.conv1 = torch.nn.functional.relu(torch.nn.Conv2d(agent_history_length, 
-															  n_filters[0], 
-															  kernel_size=(8,8), 
-															  stride=4,
-															  bias=False))
+
 		# 32 input layers, 64 filters of 4x4 layer w/ stride 2, apply rectifier
 		# output is 9x9x64
-		self.conv2 = torch.nn.functional.relu(torch.nn.Conv2d(n_filters[0],
-															  n_filters[1],
-															  kernel_size=(4,4),
-															  stride=2,
-															  bias=False))
+
 		# 64 input layers, 64 filters of 3x3 layer w/ stride 1, apply rectifier
 		# output is 7x7x64
-		self.conv3 = torch.nn.functional.relu(torch.nn.Conv2d(n_filters[1],
-															  n_filters[2],
-															  kernel_size=(3,3),
-															  stride=1,
-															  bias=False))
+
 		# 64 input layers, 1024 filters of 7x7 layer w/ stride 1, apply rectifier
 		# output is 1x1x1024
-		self.conv4 = torch.nn.functional.relu(torch.nn.Conv2d(n_filters[2],
-															  n_filters[3],
-															  kernel_size=(7,7),
-															  stride=1,
-															  bias=False))
+		self.conv = torch.nn.Sequential(
+			# 1st layer
+			torch.nn.Conv2d(agent_history_length, n_filters[0], kernel_size=(8,8), stride=4, bias=False),
+			torch.nn.ReLU(),
+			# 2nd layer
+			torch.nn.Conv2d(n_filters[0], n_filters[1], kernel_size=(4,4), stride=2, bias=False),
+			torch.nn.ReLU(),
+			# 3rd layer
+			torch.nn.Conv2d(n_filters[1], n_filters[2], kernel_size=(3,3), stride=1, bias=False),
+			torch.nn.ReLU(),
+			# 4th layer
+			torch.nn.Conv2d(n_filters[2], n_filters[3], kernel_size=(7,7), stride=1, bias=False),
+			torch.nn.ReLU()
+			)
+
 		# advantage stream
-		self.action = torch.nn.Sequential(
+		self.advantage = torch.nn.Sequential(
 			torch.nn.Linear(512,512),
-			torch.nn.ReLu(),
+			torch.nn.ReLU(),
 			torch.nn.Linear(512,n_actions)
 			)
 
 		# value stream
 		self.value = torch.nn.Sequential(
 			torch.nn.Linear(512,512),
-			torch.nn.ReLu(),
+			torch.nn.ReLU(),
 			torch.nn.Linear(512,1)
 			)
 
@@ -91,14 +91,11 @@ class DQN(torch.nn.Module):
 		Returns:
 			Vector of predicted value of taking any of n_action actions given current state
 		'''
-		x = self.conv1(x) # pass through first convolutional layer
-		x = self.conv2(x) # pass through second convolutional layer
-		x = self.conv3(x) # pass through third convolutional layer
-		x = self.conv4(x) # pass through fourth convolutional layer
-		value, advantage = torch.split(x, 2, 3)
-		value = self.value(torch.flatten(value)) # value of being in state
-		advantage = self.advantage(torch.flatten(advantage)) # vector of advantage for each action
-		return value + (advantage - np.mean(advantage))
+		x = self.conv(x.unsqueeze(0)) # pass through convolutional layer
+		value, advantage = torch.chunk(torch.flatten(x), 2)
+		value = self.value(value) # value of being in state
+		advantage = self.advantage(advantage) # vector of advantage for each action
+		return value + advantage - advantage.mean()
 
 	def act(self, state, eps):
 		'''
@@ -111,14 +108,12 @@ class DQN(torch.nn.Module):
 		'''
 		if np.random.random() < eps: # exploit
 			state = torch.tensor(state)
-			q_val = self.forward(state)
-			action = np.argmax(q_val)
+			q_val = self.forward(state.float())
+			action = torch.argmax(q_val)
 		else: # explore
 			action = np.random.randint(0, self.action_space)
 
 		return action
-
-## Exploration v Exploitation scheduler ###########################################################
 
 ## Experience Replay class ########################################################################
 
@@ -243,7 +238,7 @@ class Atari():
 			for _ in range(random.randint(1, self.no_op_steps)):
 				frame, _, _, _ = self.env.step(1) # Action 'Fire'
 		processed_frame = self.process_frame(frame) # process frame
-		self.state = np.repeat(processed_frame, self.agent_history_length, axis=2) # stack to create initial state
+		self.state = np.repeat(processed_frame[None, :, :], self.agent_history_length, axis=0) # stack to create initial state
 
 		return terminal_life_lost
 
@@ -262,7 +257,7 @@ class Atari():
 		self.last_lives = info['ale.lives']
 
 		processed_new_frame = self.process_frame(new_frame) # process frame
-		new_state = np.append(self.state[:, :, 1:], processed_new_frame, axis=2) # create new state
+		new_state = np.append(self.state[1:, :, :], processed_new_frame[None, :, :], axis=0) # create new state
 		self.state = new_state
 		
 		return processed_new_frame, reward, terminal, terminal_life_lost, new_frame

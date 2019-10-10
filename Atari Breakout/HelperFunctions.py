@@ -22,7 +22,7 @@ def learn(mem_replay, main_dqn, eps, target_dqn, batch_size, gamma, opt):
 		loss: double for loss value
 	'''
 	# Draw a minibatch from the replay memory
-	states, actions, rewards, new_states, terminal_flags = replay_memory.get_minibatch() 
+	states, actions, rewards, new_states, terminal_flags = mem_replay.get_minibatch() 
 
 	# The main network estimates which action is best (in the next state s', new_states is passed!) 
 	# for every transition in the minibatch

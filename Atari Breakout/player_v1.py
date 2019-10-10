@@ -6,8 +6,8 @@ import sys
 import os
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
-import HelperClasses # contains helpful classes for learning
-import HelperFunctions # contains helpful functions
+from HelperClasses import * # contains helpful classes for learning
+from HelperFunctions import * # contains helpful functions
 
 # control parameter
 ENV_NAME = 'BreakoutDeterministic-v4' # game environment for gym
@@ -50,7 +50,7 @@ while frame_number < MAX_FRAMES:
 	while epoch_frame < EVAL_FREQUENCY:
 		terminal_life_lost = atari.reset() # initialize state
 		episode_reward_sum = 0 # initialize reward count
-		for _ in range(MAX_EPISODE_LENGTH):
+		for i in range(MAX_EPISODE_LENGTH):
 			# get probability of taking random action and get action
 			eps = EESchedule(frame_number, REPLAY_MEMORY_START_SIZE, EPS_INIT, EPS_FINAL)
 			action = main_dqn.act(state=atari.state, eps=eps)
@@ -68,7 +68,7 @@ while frame_number < MAX_FRAMES:
 
 			# add experience to memory
 			mem_replay.add_experience(action=action, 
-									  frame=processed_new_frame[:, :, 0], 
+									  frame=processed_new_frame, 
 									  reward=clipped_reward, 
 									  terminal=terminal_life_lost)
 
